@@ -1,0 +1,29 @@
+#!/bin/bash
+
+_git_switch() {
+    local cur prev opts accounts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    
+    # Options principales
+    opts="-l --list -u --use -a --add -h --help"
+    
+    # Si l'option précédente est -u ou --use, proposer les comptes disponibles
+    if [[ ${prev} == "-u" || ${prev} == "--use" ]]; then
+        # Récupération des comptes disponibles (sans l'extension .conf)
+        accounts=$(find "${HOME}/.config/git-switch/account" -name "*.conf" -type f 2>/dev/null | xargs -I{} basename {} .conf 2>/dev/null)
+        COMPREPLY=( $(compgen -W "${accounts}" -- ${cur}) )
+        return 0
+    # Si l'option précédente est -a ou --add, pas de complétion spécifique
+    elif [[ ${prev} == "-a" || ${prev} == "--add" ]]; then
+        return 0
+    # Sinon, proposer les options principales
+    else
+        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+        return 0
+    fi
+}
+
+# Enregistrement de la fonction de complétion pour git-switch
+complete -F _git_switch git-switch

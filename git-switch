@@ -1,0 +1,155 @@
+#!/bin/bash
+
+# Color definitions
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m' # No Color
+
+CONFIG_DIR="$HOME/.config/git-switch"
+ACCOUNTS_DIR="$CONFIG_DIR/account"
+
+# Create directories if they don't exist
+mkdir -p "$ACCOUNTS_DIR"
+
+# Function to display help
+show_help() {
+    echo -e "${BOLD}${BLUE}git-switch${NC} - Git Account Manager"
+    echo
+    echo -e "${BOLD}USAGE:${NC}"
+    echo -e "  git-switch [OPTION] [ACCOUNT]"
+    echo
+    echo -e "${BOLD}OPTIONS:${NC}"
+    echo -e "  ${GREEN}-l, --list${NC}                List all available accounts"
+    echo -e "  ${GREEN}-u, --use${NC} ${YELLOW}ACCOUNT${NC}         Use the specified account"
+    echo -e "  ${GREEN}-a, --add${NC} ${YELLOW}ACCOUNT${NC}         Add a new account"
+    echo -e "  ${GREEN}-h, --help${NC}                Display this help"
+    echo
+    echo -e "${BOLD}EXAMPLES:${NC}"
+    echo -e "  git-switch --list"
+    echo -e "  git-switch --use rotopo"
+    echo -e "  git-switch --add new_account"
+}
+
+# Function to list available accounts
+list_accounts() {
+    echo -e "${BOLD}Available accounts:${NC}"
+    found=false
+    for account in "$ACCOUNTS_DIR"/*.conf; do
+        if [ -f "$account" ]; then
+            found=true
+            name=$(basename "$account" .conf)
+            username=$(grep "^Username " "$account" | cut -d' ' -f2-)
+            email=$(grep "^Email " "$account" | cut -d' ' -f2-)
+            echo -e "  ${CYAN}$name${NC} - $username <$email>"
+        fi
+    done
+    
+    if [ "$found" = false ]; then
+        echo -e "  ${YELLOW}No accounts found.${NC}"
+        echo -e "  Use '${GREEN}git-switch --add ACCOUNT${NC}' to add an account."
+    fi
+}
+
+# Function to use a specific account
+use_account() {
+    account_file="$ACCOUNTS_DIR/$1.conf"
+    
+    if [ ! -f "$account_file" ]; then
+        echo -e "${RED}Error:${NC} The account '$1' does not exist."
+        echo -e "Use '${GREEN}git-switch --list${NC}' to see available accounts."
+        exit 1
+    fi
+    
+    # Read account information
+    name=$(grep "^Username " "$account_file" | cut -d' ' -f2-)
+    email=$(grep "^Email " "$account_file" | cut -d' ' -f2-)
+    key=$(grep "^Gpg " "$account_file" | cut -d' ' -f2- 2>/dev/null)
+    
+    # Git configuration
+    git config user.name "$name"
+    git config user.email "$email"
+    
+    # GPG signature configuration if a key is specified
+    if [ -n "$key" ]; then
+        git config user.signingkey "$key"
+        git config commit.gpgsign true
+        git config tag.gpgSign true
+        echo -e "${GREEN}Git account configured for:${NC} $name <$email> ${PURPLE}(with GPG signature)${NC}"
+    else
+        git config --unset user.signingkey 2>/dev/null || true
+        git config commit.gpgsign false
+        git config tag.gpgSign false
+        echo -e "${GREEN}Git account configured for:${NC} $name <$email> ${YELLOW}(without GPG signature)${NC}"
+    fi
+}
+
+# Function to add a new account
+add_account() {
+    account_file="$ACCOUNTS_DIR/$1.conf"
+    
+    if [ -f "$account_file" ]; then
+        read -p "$(echo -e "${YELLOW}The account '$1' already exists. Do you want to overwrite it? (y/N):${NC} ")" confirm
+        if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+            echo -e "${YELLOW}Operation cancelled.${NC}"
+            exit 0
+        fi
+    fi
+    
+    # Request information
+    read -p "$(echo -e "${CYAN}Username:${NC} ")" username
+    read -p "$(echo -e "${CYAN}Email:${NC} ")" email
+    read -p "$(echo -e "${CYAN}GPG key (leave empty if not used):${NC} ")" gpg_key
+    
+    # Write configuration file
+    echo "# $account_file" > "$account_file"
+    echo "Username $username" >> "$account_file"
+    echo "Email $email" >> "$account_file"
+    if [ -n "$gpg_key" ]; then
+        echo "Gpg $gpg_key" >> "$account_file"
+        echo -e "${GREEN}Account '$1' added successfully${NC} ${PURPLE}(with GPG signature)${NC}"
+    else
+        echo -e "${GREEN}Account '$1' added successfully${NC} ${YELLOW}(without GPG signature)${NC}"
+    fi
+}
+
+# Process arguments
+if [ $# -eq 0 ]; then
+    show_help
+    exit 0
+fi
+
+case "$1" in
+    -l|--list)
+        list_accounts
+        ;;
+    -u|--use)
+        if [ -z "$2" ]; then
+            echo -e "${RED}Error:${NC} You must specify an account name."
+            exit 1
+        fi
+        use_account "$2"
+        ;;
+    -a|--add)
+        if [ -z "$2" ]; then
+            echo -e "${RED}Error:${NC} You must specify an account name."
+            exit 1
+        fi
+        add_account "$2"
+        ;;
+    -h|--help)
+        show_help
+        ;;
+    *)
+        echo -e "${RED}Unrecognized option:${NC} $1"
+        show_help
+        exit 1
+        ;;
+esac
+
+exit 0
+
