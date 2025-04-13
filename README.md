@@ -56,5 +56,6 @@ git config user.signingkey
 To uninstall git-switch from the system:
 
 ```bash
+chmod +x ./uninstall.sh
 sudo ./uninstall.sh
 ```
